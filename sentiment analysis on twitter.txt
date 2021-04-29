@@ -1,0 +1,82 @@
+import tweepy
+from textblob import TextBlob
+import pandas as pd
+import numpy as np
+import re
+import matplotlib.pyplot as plt
+config = pd.read_csv("./config.csv")
+twitterapikey= config['twitterapikey'][0]
+twitterapisecret= config['twitterapisecret'][0]
+twitterapiaccesstoken=config['twitterapiaccesstoken'][0]
+twitterapiaccesstokensecret=config['twitterapiaccesstokensecret'][0]
+auth=tweepy.OAuthHandler(twitterapikey,twitterapisecret)
+auth.set_access_token(twitterapiaccesstoken,twitterapiaccesstokensecret)
+twitterapi = tweepy.API(auth,wait_on_rate_limit=True)
+twitteraccount = "narendramodi"
+tweets = tweepy.Cursor(twitterapi.user_timeline,
+                      screen_name=twitteraccount,
+                      count=None,
+                      since_id=None,
+                      max_id=None,trim_user=True,exclude_replies=True,contribubtor_details=False,
+                      include_entities=False).items(50)
+df = pd.DataFrame(data=[tweet.text for tweet in tweets],columns=['Tweet'])
+df.head()
+import re
+def cleanuptweet(txt):
+    txt = re.sub(r'@[A-Za-z0-9_]+', '', txt)
+    txt = re.sub(r'#', '', txt)
+    txt = re.sub(r'RT : ', '', txt)
+    txt = re.sub(r'https?:\/\/[A-Za-z0-9\.\/]+', '', txt)
+    return txt
+df['Tweet']=df['Tweet'].apply(cleanuptweet)
+def gettextsubjectivity(txt):
+    return TextBlob(txt).sentiment.subjectivity
+def gettextpolarity(txt):
+    return TextBlob(txt).sentiment.polarity
+df['subjectivity']=df['Tweet'].apply(gettextsubjectivity)
+df['polarity']=df['Tweet'].apply(gettextpolarity)
+df.head(50)
+df = df.drop(df[df['Tweet']==''].index)
+df.head(50)
+def gettextanalysis(a):
+    if a<0:
+        return "Negative"
+    elif a==0:
+        return "Neutral"
+    else:
+        return "Positive"
+df["score"]=df['polarity'].apply(gettextanalysis)
+df.head(50)
+positive=df[df['score']=="Positive"]
+print(str(positive.shape[0]/(df.shape[0])*100)+"% of Positive tweets")
+pos=positive.shape[0]/df.shape[0]*100
+negative=df[df['score']=="Negative"]
+print(str(negative.shape[0]/(df.shape[0])*100)+"% of Negative tweets")
+neg=negative.shape[0]/df.shape[0]*100
+neutral=df[df['score']=="Neutral"]
+print(str(neutral.shape[0]/(df.shape[0])*100)+"% of Neutral tweets")
+neutrall=neutral.shape[0]/df.shape[0]*100
+explode=(0,0.1,0)
+labels='Positive','Negative','Neutral'
+sizes=[pos,neg,neutrall]
+colors=['green','red','gold']
+plt.pie(sizes,explode=explode,colors=colors,autopct='%1.1f%%',startangle=120)
+plt.legend(labels,loc=(-0.05,0.05),shadow=True)
+plt.axis('equal')
+plt.savefig("Sentiment_Analysis.png")
+labels = df.groupby('score').count().index.values
+values = df.groupby('score').size().values
+plt.bar(labels,values)
+plt.savefig("Sentiment_Analysis_bargraph.png")
+for index, row in df.iterrows():
+    if row['score']=='Positive':
+        plt.scatter(row['polarity'],row['subjectivity'],color='green')
+    elif row['score']=='Negative':
+        plt.scatter(row['polarity'],row['subjectivity'],color='red')
+    elif row['score']=='Neutral':
+        plt.scatter(row['polarity'],row['subjectivity'],color='blue')
+
+plt.title('Twitter Sentiment Analysis')
+plt.xlabel('Polarity')
+plt.ylabel('Subjectivity')
+plt.show()
